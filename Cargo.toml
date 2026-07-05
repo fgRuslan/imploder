@@ -1,0 +1,9 @@
+[package]
+name = "imploder"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+flate2 = "1.1.9"
+pklib = "0.2.0"
+rawzip = "0.4.4"
