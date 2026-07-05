@@ -231,8 +231,7 @@ checksum = "a89322df9ebe1c1578d689c92318e070967d1042b512afbe49518723f4e6d5cd"
 [[package]]
 name = "pklib"
 version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e88b72c1327d25f7c73e2ac5a565ae1f7703a310aea1edfb4ea57ac2243e28f2"
+source = "git+https://github.com/fgRuslan/pklib-rs?branch=main#cedf169266d70f10cd1d6c9fd9d3fc38fccf6604"
 dependencies = [
  "clap",
  "indicatif",

@@ -1,4 +1,4 @@
-use std::{fs::{self, File}, io::{Read, Seek, Write}, time::UNIX_EPOCH};
+use std::{fs::{self, File}, io::{Read, Seek, Write}, process::exit, time::UNIX_EPOCH};
 use pklib;
 use rawzip::{ZipArchiveWriter, time::ZipDateTime};
 use clap::{Parser, Subcommand};
@@ -16,6 +16,14 @@ Examples:
 struct Args {
     directory: String,
     output_archive: String
+}
+
+#[test]
+fn test_large_file_implode() {
+    let data = vec![0u8; 50_000];
+    let compressed = pklib::implode_bytes(&data, pklib::CompressionMode::Binary, pklib::DictionarySize::Size4K).unwrap();
+    let decompressed = pklib::explode_bytes(&compressed).unwrap();
+    assert_eq!(data.len(), decompressed.len());
 }
 
 fn implode_test(input_dir: String, output_archive: String) -> Result<(), Box<dyn std::error::Error>> {
@@ -70,7 +78,7 @@ fn process_file(archive: &mut ZipArchiveWriter<&mut Vec<u8>>, filename: &str, mo
 
     let (_, descriptor) = writer.finish()?;
     let compressed = entry.finish(descriptor)?;
-
+    
     Ok::<(), Box<dyn std::error::Error>>(())
 }
 
