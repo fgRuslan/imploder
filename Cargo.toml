@@ -4,6 +4,13 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-flate2 = "1.1.9"
+clap = "4.6.1"
 pklib = "0.2.0"
 rawzip = "0.4.4"
+
+[profile.release]
+codegen-units = 1
+lto = true
+strip = true
+panic = 'abort'
+opt-level = 'z'

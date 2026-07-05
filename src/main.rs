@@ -1,41 +1,61 @@
-use std::{fs::File, io::{Read, Write}};
-use flate2;
+use std::{fs::{self, File}, io::{Read, Seek, Write}, time::UNIX_EPOCH};
 use pklib;
 use rawzip::{ZipArchiveWriter, time::ZipDateTime};
+use clap::{Parser, Subcommand};
 
-fn implode_test() -> Result<(), Box<dyn std::error::Error>> {
-    let data = b"Hello, world!";
-    let modification_time = ZipDateTime::from_unix(1783257786);
+const AFTER_TEST: &str = "
+Examples:
+    imploder directory/ out.zip
 
+    please note that the contents of the \"directory\" will be at the root of the archive
+";
+
+#[derive(Parser)]
+#[command(author, version, about, long_about = None)]
+#[clap(after_help = AFTER_TEST)]
+struct Args {
+    directory: String,
+    output_archive: String
+}
+
+fn implode_test(input_dir: String, output_archive: String) -> Result<(), Box<dyn std::error::Error>> {
     let mut output = Vec::new();
     let mut archive = rawzip::ZipArchiveWriter::new(&mut output);
 
-    let (mut entry, config) = archive.new_file("test.txt")
-    .last_modified(modification_time)
-    .compression_method(rawzip::CompressionMethod::Terse)
-    .start()?;
+    let mut file_list = Vec::new();
+    let dir_heh = std::fs::read_dir(input_dir)?;
 
-    let encoder = pklib::implode::ImplodeWriter::new(&mut entry, pklib::CompressionMode::Binary, pklib::DictionarySize::Size2K)?;
+    for file_path in dir_heh {
+        let shit = file_path.unwrap().path().display().to_string();
+        file_list.push(shit);
+    }
 
-    let mut writer = config.wrap(encoder);
+    for mut file in file_list {
+        let mut curr_file = File::open(&file)?;
+        let mut buf: Vec<u8> = Vec::new();
+        let byte_count = curr_file.read_to_end(&mut buf)?;
 
-    std::io::copy(&mut &data[..], &mut writer)?;
+        file = String::from(file.split('\\').last().unwrap());
+        //println!("{}: {}", file, byte_count);
 
-    let (_, descriptor) = writer.finish()?;
-    let compressed = entry.finish(descriptor)?;
+        let mod_time_unix = curr_file.metadata()?.modified()?.duration_since(UNIX_EPOCH)?.as_secs();
+        let mod_time2 = ZipDateTime::from_unix(mod_time_unix.cast_signed());
+        
+        println!("processing {}...", file);
+        process_file(&mut archive, &file.as_str(), mod_time2, &buf)?;
+    }
+
     archive.finish()?;
 
-    println!("{:?}", output);
-
     {
-        let mut file = File::create("output.zip")?;
+        let mut file = File::create(output_archive)?;
         file.write_all(output.as_slice())?;
     }
 
     Ok::<(), Box<dyn std::error::Error>>(())
 }
 
-fn process_file(mut archive: ZipArchiveWriter<&mut Vec<u8>>, filename: &str, modification_time: ZipDateTime, data) -> Result<(), Box<dyn std::error::Error>>
+fn process_file(archive: &mut ZipArchiveWriter<&mut Vec<u8>>, filename: &str, modification_time: ZipDateTime, data: &[u8]) -> Result<(), Box<dyn std::error::Error>>
 {
     let (mut entry, config) = archive.new_file(filename)
     .last_modified(modification_time)
@@ -49,12 +69,15 @@ fn process_file(mut archive: ZipArchiveWriter<&mut Vec<u8>>, filename: &str, mod
     std::io::copy(&mut &data[..], &mut writer)?;
 
     let (_, descriptor) = writer.finish()?;
+    let compressed = entry.finish(descriptor)?;
 
     Ok::<(), Box<dyn std::error::Error>>(())
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    implode_test();
+    let args = Args::parse();
+
+    implode_test(args.directory, args.output_archive);
 
     Ok::<(), Box<dyn std::error::Error>>(())
 }
