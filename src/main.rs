@@ -1,7 +1,11 @@
-use std::{fs::{self, File}, io::{Read, Seek, Write}, process::exit, time::UNIX_EPOCH};
+use clap::Parser;
 use pklib;
 use rawzip::{ZipArchiveWriter, time::ZipDateTime};
-use clap::{Parser, Subcommand};
+use std::{
+    fs::File,
+    io::{Read, Write},
+    time::UNIX_EPOCH,
+};
 
 const AFTER_TEST: &str = "
 Examples:
@@ -15,18 +19,26 @@ Examples:
 #[clap(after_help = AFTER_TEST)]
 struct Args {
     directory: String,
-    output_archive: String
+    output_archive: String,
 }
 
 #[test]
 fn test_large_file_implode() {
     let data = vec![0u8; 50_000];
-    let compressed = pklib::implode_bytes(&data, pklib::CompressionMode::Binary, pklib::DictionarySize::Size4K).unwrap();
+    let compressed = pklib::implode_bytes(
+        &data,
+        pklib::CompressionMode::Binary,
+        pklib::DictionarySize::Size4K,
+    )
+    .unwrap();
     let decompressed = pklib::explode_bytes(&compressed).unwrap();
     assert_eq!(data.len(), decompressed.len());
 }
 
-fn implode_test(input_dir: String, output_archive: String) -> Result<(), Box<dyn std::error::Error>> {
+fn implode_test(
+    input_dir: String,
+    output_archive: String,
+) -> Result<(), Box<dyn std::error::Error>> {
     let mut output = Vec::new();
     let mut archive = rawzip::ZipArchiveWriter::new(&mut output);
 
@@ -46,10 +58,14 @@ fn implode_test(input_dir: String, output_archive: String) -> Result<(), Box<dyn
         file = String::from(file.split('\\').last().unwrap());
         //println!("{}: {}", file, byte_count);
 
-        let mod_time_unix = curr_file.metadata()?.modified()?.duration_since(UNIX_EPOCH)?.as_secs();
+        let mod_time_unix = curr_file
+            .metadata()?
+            .modified()?
+            .duration_since(UNIX_EPOCH)?
+            .as_secs();
         let mod_time2 = ZipDateTime::from_unix(mod_time_unix.cast_signed());
-        
-        println!("processing {}...", file);
+
+        println!("imploding {}...", file);
         process_file(&mut archive, &file.as_str(), mod_time2, &buf)?;
     }
 
@@ -63,14 +79,24 @@ fn implode_test(input_dir: String, output_archive: String) -> Result<(), Box<dyn
     Ok::<(), Box<dyn std::error::Error>>(())
 }
 
-fn process_file(archive: &mut ZipArchiveWriter<&mut Vec<u8>>, filename: &str, modification_time: ZipDateTime, data: &[u8]) -> Result<(), Box<dyn std::error::Error>>
-{
-    let (mut entry, config) = archive.new_file(filename)
-    .last_modified(modification_time)
-    .compression_method(rawzip::CompressionMethod::Terse)
-    .start()?;
+fn process_file(
+    archive: &mut ZipArchiveWriter<&mut Vec<u8>>,
+    filename: &str,
+    modification_time: ZipDateTime,
+    data: &[u8],
+) -> Result<(), Box<dyn std::error::Error>> {
+    let (mut entry, config) = archive
+        .new_file(filename)
+        //setting last_modified sets the "UT extra field modtime" which is fine for pkzip but breaks mdk2
+        //.last_modified(modification_time)
+        .compression_method(rawzip::CompressionMethod::Terse)
+        .start()?;
 
-    let encoder = pklib::implode::ImplodeWriter::new(&mut entry, pklib::CompressionMode::Binary, pklib::DictionarySize::Size2K)?;
+    let encoder = pklib::implode::ImplodeWriter::new(
+        &mut entry,
+        pklib::CompressionMode::Binary,
+        pklib::DictionarySize::Size4K,
+    )?;
 
     let mut writer = config.wrap(encoder);
 
@@ -78,14 +104,14 @@ fn process_file(archive: &mut ZipArchiveWriter<&mut Vec<u8>>, filename: &str, mo
 
     let (_, descriptor) = writer.finish()?;
     let compressed = entry.finish(descriptor)?;
-    
+
     Ok::<(), Box<dyn std::error::Error>>(())
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Args::parse();
 
-    implode_test(args.directory, args.output_archive);
+    implode_test(args.directory, args.output_archive)?;
 
     Ok::<(), Box<dyn std::error::Error>>(())
 }
