@@ -54,10 +54,9 @@ fn implode_test(
     for mut file in file_list {
         let mut curr_file = File::open(&file)?;
         let mut buf: Vec<u8> = Vec::new();
-        let byte_count = curr_file.read_to_end(&mut buf)?;
+        let source_byte_count = curr_file.read_to_end(&mut buf)?;
 
         file = String::from(file.split('\\').last().unwrap());
-        //println!("{}: {}", file, byte_count);
 
         let mod_time_unix = curr_file
             .metadata()?
@@ -66,16 +65,21 @@ fn implode_test(
             .as_secs();
         let mod_time2 = ZipDateTime::from_unix(mod_time_unix.cast_signed());
 
-        println!("imploding {}...", file);
-        process_file(&mut archive, &file.as_str(), mod_time2, &buf)?;
+        print!("imploding {}...", file);
+        let compressed_size = process_file(&mut archive, &file.as_str(), mod_time2, &buf)?;
+        println!("{} -> {} bytes", source_byte_count, compressed_size);
     }
 
     archive.finish()?;
+
+    println!("writing the archive to disk...");
 
     {
         let mut file = File::create(output_archive)?;
         file.write_all(output.as_slice())?;
     }
+
+    println!("done!");
 
     Ok::<(), Box<dyn std::error::Error>>(())
 }
@@ -85,7 +89,7 @@ fn process_file(
     filename: &str,
     modification_time: ZipDateTime,
     data: &[u8],
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<u64, Box<dyn std::error::Error>> {
     let (mut entry, config) = archive
         .new_file(filename)
         //setting last_modified sets the "UT extra field modtime" which is fine for pkzip but breaks mdk2
@@ -106,20 +110,7 @@ fn process_file(
     let (_, descriptor) = writer.finish()?;
     let compressed = entry.finish(descriptor)?;
 
-    /*
-
-    let cmp2 = pklib::implode_bytes(data, pklib::CompressionMode::Binary, pklib::DictionarySize::Size4K).unwrap();
-    let dcmp2 = pklib::explode_bytes(&cmp2).unwrap();
-
-    let c = data.to_vec();
-
-    assert_eq!(data.eq(&c), true);
-    assert_eq!(data.eq(&dcmp2), true);
-    assert_eq!(data.len(), dcmp2.len());
-    assert_eq!(dcmp2, c);
-    */
-
-    Ok::<(), Box<dyn std::error::Error>>(())
+    Ok::<u64, Box<dyn std::error::Error>>(compressed)
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
