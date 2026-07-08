@@ -5,7 +5,7 @@ edition = "2024"
 
 [dependencies]
 clap = "4.6.1"
-pklib = { git = "https://github.com/fgRuslan/pklib-rs", branch = "main" }
+pklib = { git = "https://github.com/fgRuslan/pklib-rs", rev = "d94f5bef9461c9c964c18a56cb9821de464b818e" }
 rawzip = "0.4.4"
 
 [profile.release]

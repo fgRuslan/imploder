@@ -231,7 +231,7 @@ checksum = "a89322df9ebe1c1578d689c92318e070967d1042b512afbe49518723f4e6d5cd"
 [[package]]
 name = "pklib"
 version = "0.2.0"
-source = "git+https://github.com/fgRuslan/pklib-rs?branch=main#cedf169266d70f10cd1d6c9fd9d3fc38fccf6604"
+source = "git+https://github.com/fgRuslan/pklib-rs?rev=d94f5bef9461c9c964c18a56cb9821de464b818e#d94f5bef9461c9c964c18a56cb9821de464b818e"
 dependencies = [
  "clap",
  "indicatif",

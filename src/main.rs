@@ -24,7 +24,7 @@ struct Args {
 
 #[test]
 fn test_large_file_implode() {
-    let data = vec![0u8; 50_000];
+    let data = vec![0u8; 10_000_000];
     let compressed = pklib::implode_bytes(
         &data,
         pklib::CompressionMode::Binary,
@@ -33,6 +33,7 @@ fn test_large_file_implode() {
     .unwrap();
     let decompressed = pklib::explode_bytes(&compressed).unwrap();
     assert_eq!(data.len(), decompressed.len());
+    assert_eq!(data, decompressed);
 }
 
 fn implode_test(
@@ -104,6 +105,19 @@ fn process_file(
 
     let (_, descriptor) = writer.finish()?;
     let compressed = entry.finish(descriptor)?;
+
+    /*
+
+    let cmp2 = pklib::implode_bytes(data, pklib::CompressionMode::Binary, pklib::DictionarySize::Size4K).unwrap();
+    let dcmp2 = pklib::explode_bytes(&cmp2).unwrap();
+
+    let c = data.to_vec();
+
+    assert_eq!(data.eq(&c), true);
+    assert_eq!(data.eq(&dcmp2), true);
+    assert_eq!(data.len(), dcmp2.len());
+    assert_eq!(dcmp2, c);
+    */
 
     Ok::<(), Box<dyn std::error::Error>>(())
 }
