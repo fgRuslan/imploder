@@ -1,11 +1,17 @@
 use clap::{Parser, Subcommand};
 use pklib;
-use rawzip::{ZipArchiveWriter, time::{Utc, UtcDateTime, ZipDateTime}};
+use rawzip::{
+    ZipArchiveWriter,
+    time::ZipDateTime,
+};
 use std::{
-    fs::File, io::{Read, Write}, path::Path, time::{Duration, UNIX_EPOCH},
+    fs::File,
+    io::{Read, Write},
+    path::Path,
+    time::{Duration, UNIX_EPOCH},
 };
 
-const AFTER_TEST: &str = "\
+const AFTER_TEXT: &str = "\
 Examples:
     imploder create directory/ out.zip
     imploder extract archive.zip directory/
@@ -15,7 +21,7 @@ please note that for `create` the directory contents are placed at the archive r
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
-#[clap(after_help = AFTER_TEST)]
+#[clap(after_help = AFTER_TEXT)]
 struct Args {
     #[clap(subcommand)]
     subcommand: AppSubCommand,
@@ -64,8 +70,8 @@ fn implode_test(
     let dir_heh = std::fs::read_dir(input_dir)?;
 
     for file_path in dir_heh {
-        let shit = file_path.unwrap().path().display().to_string();
-        file_list.push(shit);
+        let filename = file_path.unwrap().path().display().to_string();
+        file_list.push(filename);
     }
 
     for mut file in file_list {
@@ -80,10 +86,11 @@ fn implode_test(
             .modified()?
             .duration_since(UNIX_EPOCH)?
             .as_secs();
-        let mod_time2 = ZipDateTime::from_unix(mod_time_unix.cast_signed());
+        let mod_time = ZipDateTime::from_unix(mod_time_unix.cast_signed());
 
         print!("imploding {}...", file);
-        let compressed_size = process_file(&mut archive, &file.as_str(), mod_time2, &buf)?;
+        std::io::stdout().flush()?;
+        let compressed_size = process_file(&mut archive, file.as_str(), mod_time, &buf)?;
         println!("{} -> {} bytes", source_byte_count, compressed_size);
     }
 
@@ -170,7 +177,9 @@ fn explode(input_archive: String, output_dir: String) -> Result<(), Box<dyn std:
             let modify_time = entry.last_modified();
 
             let _d = match modify_time {
-                rawzip::time::ZipDateTimeKind::Utc(dt) => UNIX_EPOCH + Duration::from_secs(dt.to_unix() as u64),
+                rawzip::time::ZipDateTimeKind::Utc(dt) => {
+                    UNIX_EPOCH + Duration::from_secs(dt.to_unix() as u64)
+                }
                 _ => UNIX_EPOCH,
             };
 
@@ -181,7 +190,6 @@ fn explode(input_archive: String, output_dir: String) -> Result<(), Box<dyn std:
             if modify_time.year() > 1980 {
                 file.set_modified(_d)?;
             }
-            
         }
     }
 
