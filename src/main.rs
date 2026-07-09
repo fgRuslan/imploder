@@ -1,25 +1,42 @@
-use clap::Parser;
+use clap::{Parser, Subcommand};
 use pklib;
-use rawzip::{ZipArchiveWriter, time::ZipDateTime};
+use rawzip::{ZipArchiveWriter, time::{Utc, UtcDateTime, ZipDateTime}};
 use std::{
-    fs::File,
-    io::{Read, Write},
-    time::UNIX_EPOCH,
+    fs::File, io::{Read, Write}, path::Path, time::{Duration, UNIX_EPOCH},
 };
 
-const AFTER_TEST: &str = "
+const AFTER_TEST: &str = "\
 Examples:
-    imploder directory/ out.zip
+    imploder create directory/ out.zip
+    imploder extract archive.zip directory/
 
-    please note that the contents of the \"directory\" will be at the root of the archive
+please note that for `create` the directory contents are placed at the archive root
 ";
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
 #[clap(after_help = AFTER_TEST)]
 struct Args {
-    directory: String,
-    output_archive: String,
+    #[clap(subcommand)]
+    subcommand: AppSubCommand,
+}
+
+#[derive(Subcommand)]
+enum AppSubCommand {
+    /// Create an archive from a directory: create <directory> <archive>
+    Create {
+        #[arg(value_name = "DIRECTORY")]
+        directory: String,
+        #[arg(value_name = "ARCHIVE")]
+        archive: String,
+    },
+    /// Extract an archive into a directory: extract <archive> <directory>
+    Extract {
+        #[arg(value_name = "ARCHIVE")]
+        archive: String,
+        #[arg(value_name = "DIRECTORY")]
+        directory: String,
+    },
 }
 
 #[test]
@@ -113,10 +130,74 @@ fn process_file(
     Ok::<u64, Box<dyn std::error::Error>>(compressed)
 }
 
+fn explode(input_archive: String, output_dir: String) -> Result<(), Box<dyn std::error::Error>> {
+    let drr = std::fs::create_dir(String::from("./") + &output_dir);
+
+    match drr {
+        Ok(_) => println!("Created dir {}", output_dir),
+        Err(_) => println!("Seems like dir {} already exists", output_dir),
+    }
+
+    let path = Path::new(&input_archive);
+    let archive_data = std::fs::read(path)?;
+
+    let archive = rawzip::ZipArchive::from_slice(&archive_data)?;
+
+    let entries = archive.entries();
+
+    for entry in entries {
+        let entry = entry?;
+        let wayfinder = entry.wayfinder();
+
+        let filename = entry.file_path();
+        let normalized_filename = filename.try_normalize()?;
+        let filename_ref = normalized_filename.as_ref();
+
+        let local_entry = archive.get_entry(wayfinder)?;
+
+        let mut output = Vec::new();
+
+        println!("exploding {}...", filename_ref);
+
+        let decompressor = pklib::explode::ExplodeReader::new(local_entry.data())?;
+
+        let mut reader = local_entry.verifying_reader(decompressor);
+        std::io::copy(&mut reader, &mut output)?;
+
+        {
+            let mut file = File::create(output_dir.clone() + "/" + filename_ref)?;
+            file.write_all(output.as_slice())?;
+            let modify_time = entry.last_modified();
+
+            let _d = match modify_time {
+                rawzip::time::ZipDateTimeKind::Utc(dt) => UNIX_EPOCH + Duration::from_secs(dt.to_unix() as u64),
+                _ => UNIX_EPOCH,
+            };
+
+            // due to that problem with modified_time when creating archives, i decided to add this check
+            // if the modified time is not set for a file in the archive, _d becomes 1980-01-01
+            // so instead of having extracted files have nothing as their modification date i decided to only
+            // modify that time if the archive contains time info for those files
+            if modify_time.year() > 1980 {
+                file.set_modified(_d)?;
+            }
+            
+        }
+    }
+
+    Ok::<(), Box<dyn std::error::Error>>(())
+}
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Args::parse();
-
-    implode_test(args.directory, args.output_archive)?;
+    match args.subcommand {
+        AppSubCommand::Create { directory, archive } => {
+            implode_test(directory, archive)?;
+        }
+        AppSubCommand::Extract { archive, directory } => {
+            explode(archive, directory)?;
+        }
+    }
 
     Ok::<(), Box<dyn std::error::Error>>(())
 }
